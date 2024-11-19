@@ -2,19 +2,13 @@ from ultralytics import YOLO
 import cv2
 import cvzone
 import math
+import tkinter as tk
+from tkinter import filedialog
 
-# Initialize the webcam (VideoCapture(0) opens the default camera)
-cap = cv2.VideoCapture(0)  # For Webcam
-cap.set(3, 1280)  # Set the width of the webcam window
-cap.set(4, 720)  # Set the height of the webcam window
-
-# Uncomment the following line if you want to use a video file instead of a webcam
-# cap = cv2.VideoCapture("../Videos/motorbikes-1.mp4")  # For Videos
-
-# Load the YOLO model with the specified weights (yolov8n.pt in this case)
+# Load the YOLO model
 model = YOLO("../Yolo-Weights/yolov8n.pt")
 
-# List of class names that the YOLO model can detect (COCO dataset classes)
+# COCO dataset class names
 classNames = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat",
               "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
               "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
@@ -27,34 +21,62 @@ classNames = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "trai
               "teddy bear", "hair drier", "toothbrush"
               ]
 
-# Infinite loop to continuously read frames from the webcam/video
-while True:
-    success, img = cap.read()  # Capture the frame from the webcam
-    results = model(img, stream=True)  # Pass the frame through the YOLO model and stream results
+def detect_objects(video_source):
+    cap = cv2.VideoCapture(video_source)
+    # Set the resolution for the webcam
+    if isinstance(video_source, int):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-    # Process each detection result
-    for r in results:
-        boxes = r.boxes  # Get the bounding boxes for each detected object
-        for box in boxes:
-            # Get the coordinates of the bounding box (top-left and bottom-right corners)
-            x1, y1, x2, y2 = box.xyxy[0]
-            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)  # Convert coordinates to integers
+    while True:
+        success, img = cap.read()
+        if not success:
+            break
 
-            # Calculate the width and height of the bounding box
-            w, h = x2 - x1, y2 - y1
+        results = model(img, stream=True)
+        for r in results:
+            boxes = r.boxes
+            for box in boxes:
+                x1, y1, x2, y2 = box.xyxy[0]
+                x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                w, h = x2 - x1, y2 - y1
+                cvzone.cornerRect(img, (x1, y1, w, h))
+                conf = math.ceil((box.conf[0] * 100)) / 100
+                cls = int(box.cls[0])
+                cvzone.putTextRect(img, f'{classNames[cls]} {conf}', (max(0, x1), max(35, y1)), scale=1, thickness=1)
 
-            # Draw a rectangle around the detected object with corner styling using cvzone
-            cvzone.cornerRect(img, (x1, y1, w, h))
+        cv2.imshow("Detection", img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
+            break
 
-            # Get the confidence score for the detected object
-            conf = math.ceil((box.conf[0] * 100)) / 100  # Round confidence to 2 decimal places
+    cap.release()
+    cv2.destroyAllWindows()
 
-            # Get the class ID of the detected object
-            cls = int(box.cls[0])
+def main():
+    while True:
+        print("Select an option:")
+        print("1. Video")
+        print("2. Webcam")
+        print("3. Exit")
 
-            # Display the class name and confidence score on the image
-            cvzone.putTextRect(img, f'{classNames[cls]} {conf}', (max(0, x1), max(35, y1)), scale=1, thickness=1)
+        choice = input("Enter your choice: ")
 
-    # Display the image with detections in a window
-    cv2.imshow("Image", img)
-    cv2.waitKey(1)  # Wait for a key press to move to the next frame (1 ms delay)
+        if choice == '1':
+            # Open file dialog to select a video file
+            root = tk.Tk()
+            root.withdraw()  # Hide the main tkinter window
+            root.attributes('-topmost', True)
+            video_path = filedialog.askopenfilename(filetypes=[("Video files", "*.mp4;*.avi;*.mkv")])
+            root.destroy()
+            if video_path:
+                detect_objects(video_path)
+        elif choice == '2':
+            detect_objects(0)  # 0 for the default webcam
+        elif choice == '3':
+            print("Exiting the program.")
+            break
+        else:
+            print("Invalid choice. Please select 1, 2, or 3.")
+
+if __name__ == "__main__":
+    main()
